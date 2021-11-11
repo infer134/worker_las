@@ -95,7 +95,7 @@ class prj_reg(QtWidgets.QMainWindow, main_win.Ui_MainWindow):
         d = dt_tops['MD'].tolist()
         for i, j in enumerate(names):
             ax.annotate(j, (x_max -0.1 * x_max, int(d[i])), color = 'r', fontsize=5.5)
-            ax.hlines(int(d[i]), x_min, x_max, linewidth=0.25, color='g')
+            ax.hlines(int(d[i]), x_min, x_max, linewidth=0.5, color='g')
 
     def cleaner_cross(self, L=False):
         if not L:
@@ -715,6 +715,7 @@ class prj_reg(QtWidgets.QMainWindow, main_win.Ui_MainWindow):
         else:
             x, y, z = self.form_int_data()
             ax.scatter(x, y, c=z, cmap='jet', s=3)
+            self.label_Kk.setText(str(pirs(x, y)[0]))
         global canvas_cross
         canvas_cross = FigureCanvasQTAgg(fig_cross)
         toolbar_cross = NavigationToolbar2QT(canvas_cross, self)
