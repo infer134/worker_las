@@ -1,6 +1,7 @@
 import matplotlib
 from PyQt5 import Qt, QtGui, QtCore, QtWidgets
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
+import matplotlib.ticker as ticker
 import matplotlib.pyplot as plt
 from pathlib import Path
 import lib
@@ -15,6 +16,8 @@ from sklearn import preprocessing
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
 from scipy.stats import pearsonr as pirs
 from scipy.signal import correlate as AFC
 import pickle
@@ -85,6 +88,120 @@ class prj_reg(QtWidgets.QMainWindow, main_win.Ui_MainWindow):
         self.actionModel.triggered.connect(self.save_model)
         self.actionMinus.triggered.connect(self.math_minus_las)
         self.btn_corr.clicked.connect(self.pair_cross)
+        self.actionFFT.triggered.connect(self.fft_las)
+        self.btn_rfr_test.clicked.connect(self.test_rfr_param_trees)
+        self.btn_test_depth.clicked.connect(self.test_rfr_param_depth)
+        self.btn_test_depth.setVisible(False)
+
+    def test_rfr_param_depth(self):
+        data_train, x_hlam, t, b = self.data_building()
+        dt, dt_hlam = self.form_dt()
+        p = float(self.txt_train_prop.text())
+        x_train, x_test, y_train, y_test = train_test_split(data_train, dt[t:b], train_size=p)
+        n = int(self.txt_n_trees.text())
+        mist_depth = []
+        pirs_depth = []
+        for j in range(3, 100000, 200):
+            test_depth = RandomForestRegressor(n_estimators=n, max_depth=j)
+            test_depth.fit(x_train, y_train)
+            d = test_depth.predict(x_test)
+            train_m = test_depth.predict(x_train)
+            train_mse = mean_squared_error(y_train, train_m)
+            mse_depth = mean_squared_error(y_test, d)
+            mist_depth.append(mse_depth)
+            pirs_depth.append(train_mse)
+        self.btn_rfr_test.setVisible(True)
+        self.btn_test_depth.setVisible(False)
+        itr_depth = np.linspace(3, 100000, 500)
+        fig_depth = plt.Figure()
+        ax = fig_depth.add_subplot()
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(200))
+        ax.tick_params(labelsize=5)
+        ax1 = ax.twinx()
+        ax.plot(itr_depth, mist_depth, c='b', label='test')
+        ax1.plot(itr_depth, pirs_depth, c='r', label='train')
+        fig_depth.legend()
+        can_depth = FigureCanvasQTAgg(fig_depth)
+        self.layer_rfr_mist_depth.addWidget(can_depth)
+        self.btn_test_depth.setVisible(False)
+
+    def test_rfr_param_trees(self):
+        data_train, x_hlam, t, b = self.data_building()
+        dt, dt_hlam = self.form_dt()
+        p = float(self.txt_train_prop.text())
+        x_train, x_test, y_train, y_test = train_test_split(data_train, dt[t:b], train_size=p)
+        mist_trees =[]
+        mist_trees_test =[]
+        pirs_trres = []
+        for i in range(100, 2100, 100):
+            test_trees = RandomForestRegressor(n_estimators=i)
+            test_trees.fit(x_train, y_train)
+            y_mse_train = test_trees.predict(x_train)
+            mse_train = mean_squared_error(y_train, y_mse_train)
+            t = test_trees.predict(x_test)
+            mse_test = mean_squared_error(y_test, t)
+            mist_trees.append(mse_test)
+            pirs_trres.append(mse_train)
+        itr_trees = np.linspace(100, 2000, 20)
+        fig_trees = plt.Figure()
+        ax = fig_trees.add_subplot()
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(200))
+        ax.tick_params(labelsize=5)
+        ax1 = ax.twinx()
+        ax.plot(itr_trees, mist_trees, c='r', label='test')
+        ax1.plot(itr_trees, pirs_trres, c='b', label='train')
+        fig_trees.legend()
+        can_trees = FigureCanvasQTAgg(fig_trees)
+        self.layer_rfr_mist_tree.addWidget(can_trees)
+        self.btn_rfr_test.setVisible(False)
+        self.btn_test_depth.setVisible(True)
+
+    def cleaner_curve2(self, L=False):
+        if not L:
+            L = self.layer_srav
+        if L is not None:
+            while L.count():
+                item = L.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+                else:
+                    self.cleaner_curve2(item.layout())
+
+    def form_srav_curve(self, predict_las):
+        self.cleaner_curve2()
+        ngk_name = self.comboBox_first_las.currentText()
+        gk_name = self.comboBox_second_las.currentText()
+        pr = dt_las[predict_las]
+        ngk = dt_las[ngk_name]
+        gk = dt_las[gk_name]
+        d = dt_las.iloc[:, 0]
+        s = {'NGK': ngk, 'GK': gk, 'Sint': pr}
+        color_s = ['k', 'r', 'b']
+        for i, j in enumerate(s):
+            fig = plt.Figure(figsize=(5, 3))
+            fig.subplots_adjust(top=0.97, bottom=0.04)
+            ax = fig.add_subplot()
+            ax.plot(s[j], d, c=color_s[i], linewidth = 0.5)
+            ax.tick_params(labelsize=5, pad=-0.5)
+            fig.gca().invert_yaxis()
+            can = FigureCanvasQTAgg(fig)
+            self.layer_srav.addWidget(can)
+
+    def fft_las(self):
+        las_name = self.lst_keys.currentItem().text()
+        if self.txt_top_calc.text() == '' and self.txt_bot_calc.text() == '':
+            las_curve = dt_las[las_name].to_numpy()
+            d = dt_las.iloc[:, 0]
+        else:
+            t = int(self.txt_top_calc.text())
+            b = int(self.txt_bot_calc.text())
+            t = self.found_depth(t)
+            b = self.found_depth(b)
+            las_curve = dt_las[las_name][t:b].to_numpy()
+            d = dt_las.iloc[t:b, 0]
+        las_fft = np.fft.fft(las_curve)
+        print(1)
 
     def viz_tops(self):
         las_name = self.lst_keys.currentItem().text()
@@ -382,6 +499,7 @@ class prj_reg(QtWidgets.QMainWindow, main_win.Ui_MainWindow):
             new_name = msg_curve_model(self)
             dt_las[new_name] = dt_sint
             self.form_twin_stat(dt_test, dt_sint, eq)
+            self.form_srav_curve(new_name)
             self.form_lst()
             self.form_boxs()
             self.form_data_table()
@@ -416,6 +534,7 @@ class prj_reg(QtWidgets.QMainWindow, main_win.Ui_MainWindow):
             dt_sint = eq.predict(x_test)
             new_name = msg_curve_model(self)
             dt_las[new_name] = dt_sint
+            self.form_srav_curve(new_name)
             self.form_twin_stat_for_frorest(dt_test, dt_sint, eq)
             self.form_boxs()
             self.form_lst()
